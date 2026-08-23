@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#160d2b">
+<title>Pour ma Prune 💜</title>
+<style>
+:root{--pink:#ff5ea8;--purple:#8b5cf6;--bg:#0d0818}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif;color:#fff}
+body{touch-action:none}
+.screen{position:fixed;inset:0;display:none;overflow:hidden}
+.screen.active{display:flex}
+#intro{align-items:center;justify-content:center;padding:28px;background:
+ radial-gradient(circle at 20% 20%,#ff5ea82a 0 12%,transparent 35%),
+ radial-gradient(circle at 80% 75%,#8b5cf62a 0 12%,transparent 38%),#0d0818}
+.card{width:min(92vw,430px);padding:30px 24px;border:1px solid #ffffff1c;border-radius:30px;background:#ffffff0b;backdrop-filter:blur(16px);text-align:center;box-shadow:0 20px 80px #0008}
+.logo{font-size:58px;filter:drop-shadow(0 8px 18px #ff5ea855);animation:float 2.5s ease-in-out infinite}
+h1{font-size:30px;margin:12px 0 10px}
+p{color:#d9cfe5;line-height:1.5;font-size:16px}
+.small{font-size:13px;color:#9e91ac}
+button{border:0;border-radius:18px;padding:15px 24px;font-weight:800;font-size:16px;color:white;background:linear-gradient(135deg,var(--pink),var(--purple));box-shadow:0 12px 30px #8b5cf644}
+button:active{transform:scale(.97)}
+#game{background:#090612}
+#canvas{position:absolute;inset:0;width:100%;height:100%}
+#hud{position:absolute;top:max(14px,env(safe-area-inset-top));left:0;right:0;display:flex;justify-content:space-between;padding:12px 16px;pointer-events:none}
+.pill{background:#100b1dcc;border:1px solid #ffffff18;backdrop-filter:blur(10px);padding:9px 13px;border-radius:999px;font-weight:800;font-size:13px}
+#event{position:absolute;top:78px;left:50%;transform:translateX(-50%) translateY(-15px);opacity:0;background:#fff;color:#24122e;border-radius:18px;padding:10px 16px;font-weight:800;box-shadow:0 10px 35px #0008;transition:.3s;pointer-events:none;white-space:nowrap;max-width:92vw;overflow:hidden;text-overflow:ellipsis}
+#event.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#joystick{position:absolute;left:20px;bottom:max(22px,env(safe-area-inset-bottom));width:118px;height:118px;border-radius:50%;background:#ffffff0b;border:1px solid #ffffff18;backdrop-filter:blur(8px)}
+#stick{position:absolute;width:58px;height:58px;border-radius:50%;left:30px;top:30px;background:linear-gradient(135deg,#ff72b2,#8b5cf6);box-shadow:0 8px 25px #0007}
+#boost{position:absolute;right:20px;bottom:max(28px,env(safe-area-inset-bottom));width:88px;height:88px;border-radius:50%;padding:0;font-size:27px;background:linear-gradient(135deg,#ffd166,#ff5ea8)}
+#hint{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);font-size:11px;color:#ffffff70;pointer-events:none}
+#end{align-items:center;justify-content:center;padding:22px;background:radial-gradient(circle at 50% 40%,#ff5ea82c,transparent 45%),#0d0818}
+.endcard{width:min(92vw,440px);text-align:center;padding:28px;border-radius:30px;background:#ffffff0b;border:1px solid #ffffff18;backdrop-filter:blur(15px)}
+.flowers{font-size:72px;letter-spacing:-10px;animation:bloom 1.2s ease both}
+#end h2{font-size:34px;margin:8px 0}
+#end .love{font-size:48px;font-weight:900;background:linear-gradient(90deg,#ff74b9,#b58cff,#ff74b9);-webkit-background-clip:text;background-clip:text;color:transparent}
+@keyframes float{50%{transform:translateY(-8px) rotate(2deg)}}
+@keyframes bloom{from{transform:scale(.2) rotate(-8deg);opacity:0}to{transform:scale(1);opacity:1}}
+@media (orientation:landscape){#joystick{left:18px}#boost{right:18px}}
+</style>
+</head>
+<body>
+
+<section id="intro" class="screen active">
+  <div class="card">
+    <div class="logo">💜🐍</div>
+    <h1>Coucou ma Prune 🥹</h1>
+    <p>J’ai préparé un p’tit jeu pour te remonter le moral.</p>
+    <p class="small">Ps : ne me remercie pas 😘</p>
+    <button id="start">Jouer 💜</button>
+  </div>
+</section>
+
+<section id="game" class="screen">
+  <canvas id="canvas"></canvas>
+  <div id="hud">
+    <div class="pill">🐍 Taille : <span id="score">3</span> / 30</div>
+    <div class="pill">❤️ Vies : <span id="lives">3</span></div>
+  </div>
+  <div id="event"></div>
+  <div id="joystick"><div id="stick"></div></div>
+  <button id="boost" aria-label="Boost">⚡</button>
+  <div id="hint">Fais glisser le joystick pour diriger • ⚡ = boost</div>
+</section>
+
+<section id="end" class="screen">
+  <div class="endcard">
+    <div class="flowers">💐🌷🌹🌸</div>
+    <h2>Mission accomplie, ma Prune 🥹</h2>
+    <div class="love">Je t’aime ❤️</div>
+    <p>Voilà. T’as grandi le serpent, t’as survécu à mes conneries et maintenant t’as droit à ton bouquet. 😭</p>
+    <p>J’espère surtout que ça t’aura fait sourire, même un tout petit peu.</p>
+    <button id="replay">Rejouer 🐍</button>
+  </div>
+</section>
+
+<script>
+(() => {
+const canvas=document.getElementById('canvas'),ctx=canvas.getContext('2d');
+let W,H,dpr,raf,last=0,running=false,score=3,lives=3,boost=0,eventTimer=0,eventCooldown=0;
+let player,foods=[],bots=[],particles=[],touchId=null;
+const target=30;
+
+function resize(){
+ dpr=Math.min(devicePixelRatio||1,2); W=innerWidth; H=innerHeight;
+ canvas.width=W*dpr; canvas.height=H*dpr; canvas.style.width=W+'px'; canvas.style.height=H+'px';
+ ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+addEventListener('resize',resize); resize();
+
+const rand=(a,b)=>Math.random()*(b-a)+a;
+const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
+
+function makeFood(){
+ return {x:rand(18,W-18),y:rand(90,H-18),r:rand(4,8),h:rand(0,1),kind:Math.random()<.12?'heart':'dot'};
+}
+function reset(){
+ score=3;lives=3;boost=0;eventCooldown=0;eventTimer=0;foods=[];bots=[];particles=[];
+ player={x:W/2,y:H/2,angle:0,speed:105,body:[]};
+ for(let i=0;i<score;i++)player.body.push({x:player.x-i*10,y:player.y});
+ for(let i=0;i<55;i++)foods.push(makeFood());
+ for(let i=0;i<4;i++){
+   let b={x:rand(80,W-80),y:rand(130,H-80),angle:rand(0,Math.PI*2),speed:rand(42,65),body:[]};
+   for(let j=0;j<rand(7,14);j++)b.body.push({x:b.x-j*10,y:b.y});
+   bots.push(b);
+ }
+}
+function toast(t){
+ const e=document.getElementById('event');e.textContent=t;e.classList.add('show');clearTimeout(toast.t);
+ toast.t=setTimeout(()=>e.classList.remove('show'),1800);
+}
+function burst(x,y,emoji='✨'){
+ for(let i=0;i<14;i++)particles.push({x,y,vx:rand(-70,70),vy:rand(-100,-25),life:1,emoji});
+}
+function grow(){
+ score++;
+ document.getElementById('score').textContent=score;
+ if(score===7)toast('Prune a trouvé un cœur 💘');
+ if(score===12)toast('Attention… Safwan est dans la place 💀');
+ if(score===18)toast('🐍 Mode jaloux activé : il veut tous les cœurs');
+ if(score===24)toast('Encore quelques cœurs et t’es libre 😭');
+ if(score>=target)finish();
+}
+function finish(){
+ running=false; cancelAnimationFrame(raf); burst(player.x,player.y,'💜');
+ setTimeout(()=>{document.getElementById('game').classList.remove('active');document.getElementById('end').classList.add('active')},500);
+}
+function respawn(){
+ lives--;document.getElementById('lives').textContent=lives;
+ burst(player.x,player.y,'💥');
+ if(lives<=0){toast('Même les serpents font des erreurs 😭');setTimeout(reset,900)}
+ else {player.x=W/2;player.y=H/2;player.angle=0}
+}
+
+let joy={x:0,y:0};
+function setJoy(clientX,clientY){
+ const r=document.getElementById('joystick').getBoundingClientRect();
+ let dx=clientX-(r.left+r.width/2),dy=clientY-(r.top+r.height/2),m=Math.hypot(dx,dy),max=42;
+ if(m>max){dx=dx/m*max;dy=dy/m*max}
+ joy.x=dx/max;joy.y=dy/max;
+ document.getElementById('stick').style.transform=`translate(${dx}px,${dy}px)`;
+}
+function clearJoy(){joy.x=joy.y=0;document.getElementById('stick').style.transform='translate(0,0)'}
+
+const joyEl=document.getElementById('joystick');
+joyEl.addEventListener('touchstart',e=>{e.preventDefault();touchId=e.changedTouches[0].identifier;let t=e.changedTouches[0];setJoy(t.clientX,t.clientY)},{passive:false});
+joyEl.addEventListener('touchmove',e=>{e.preventDefault();for(const t of e.changedTouches)if(t.identifier===touchId)setJoy(t.clientX,t.clientY)},{passive:false});
+joyEl.addEventListener('touchend',e=>{for(const t of e.changedTouches)if(t.identifier===touchId){touchId=null;clearJoy()}},{passive:false});
+joyEl.addEventListener('touchcancel',clearJoy,{passive:true});
+
+let boostHeld=false;
+const boostBtn=document.getElementById('boost');
+boostBtn.addEventListener('touchstart',e=>{e.preventDefault();boostHeld=true},{passive:false});
+boostBtn.addEventListener('touchend',()=>boostHeld=false);
+boostBtn.addEventListener('touchcancel',()=>boostHeld=false);
+
+function eatFood(i){
+ const f=foods[i];burst(f.x,f.y,f.kind==='heart'?'💖':'✨');foods[i]=makeFood();grow();
+ if(Math.random()<.10)toast(['Un cœur pour toi 💕','T’es trop forte 😭','Même le serpent t’aime','Ptdrrrr continue','Celle-là elle était pour toi 😘'][Math.floor(Math.random()*5)]);
+}
+function update(dt){
+ const hasJoy=Math.hypot(joy.x,joy.y)>.08;
+ if(hasJoy)player.angle=Math.atan2(joy.y,joy.x);
+ else if(!player._auto) player.angle=player.angle;
+ const sp=player.speed*(boostHeld?1.9:1);
+ player.x+=Math.cos(player.angle)*sp*dt;player.y+=Math.sin(player.angle)*sp*dt;
+ if(player.x<8||player.x>W-8||player.y<80||player.y>H-8){player.x=clamp(player.x,10,W-10);player.y=clamp(player.y,82,H-10);respawn()}
+ player.body.unshift({x:player.x,y:player.y});
+ const maxBody=score*4+3;player.body.length=Math.min(player.body.length,maxBody);
+ for(const b of bots){
+   if(Math.random()<.015)b.angle+=rand(-.7,.7)*dt*8;
+   const d=dist(b,player);
+   if(d<210)b.angle=Math.atan2(player.y-b.y,player.x-b.x)+rand(-1,1);
+   b.x+=Math.cos(b.angle)*b.speed*dt;b.y+=Math.sin(b.angle)*b.speed*dt;
+   if(b.x<15||b.x>W-15||b.y<85||b.y>H-15)b.angle+=Math.PI+rand(-.6,.6);
+   b.body.unshift({x:b.x,y:b.y});b.body.length=45;
+   if(dist(b,player)<18){respawn();b.angle+=Math.PI}
+ }
+ for(let i=foods.length-1;i>=0;i--)if(dist(foods[i],player)<18)eatFood(i);
+ for(let i=0;i<particles.length;i++){let p=particles[i];p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=120*dt;p.life-=dt}
+ particles=particles.filter(p=>p.life>0);
+ if(eventCooldown>0)eventCooldown-=dt;
+ if(eventTimer>0)eventTimer-=dt;
+ if(eventCooldown<=0&&Math.random()<dt*.018){
+   eventCooldown=7;
+   const msgs=['🚨 ALERTE : le serpent Safwan arrive','😂 Ta tête vient d’apparaître sur un serpent','💅 Prune est officiellement la boss','💌 Livraison express de bisous','🐍 Hugo n’a rien à faire ici mdrr','🌸 Bonus amour activé'];
+   toast(msgs[Math.floor(Math.random()*msgs.length)]);
+   if(Math.random()<.6)burst(rand(80,W-80),rand(120,H-120),'😂');
+ }
+}
+
+function drawGrid(){
+ ctx.fillStyle='#090612';ctx.fillRect(0,0,W,H);
+ ctx.strokeStyle='#ffffff08';ctx.lineWidth=1;
+ const s=42;for(let x=0;x<W;x+=s){ctx.beginPath();ctx.moveTo(x,75);ctx.lineTo(x,H);ctx.stroke()}
+ for(let y=80;y<H;y+=s){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+}
+function drawFood(f){
+ ctx.save();ctx.translate(f.x,f.y);
+ if(f.kind==='heart'){ctx.font='18px Apple Color Emoji';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('💗',0,0)}
+ else{ctx.shadowBlur=12;ctx.shadowColor='#ff72b2';ctx.fillStyle='#ff72b2';ctx.beginPath();ctx.arc(0,0,f.r,0,7);ctx.fill()}
+ ctx.restore();
+}
+function drawSnake(s,isPlayer=false){
+ for(let i=s.body.length-1;i>=0;i--){
+   const p=s.body[i],t=i/(s.body.length||1),r=isPlayer?Math.max(7,12-t*5):Math.max(6,10-t*4);
+   ctx.fillStyle=isPlayer?`hsl(${320-t*50},90%,${65-t*20}%)`:`hsl(${180+t*80},70%,${55-t*15}%)`;
+   ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);ctx.fill();
+ }
+ const head=s.body[0];
+ ctx.save();ctx.translate(head.x,head.y);ctx.rotate(s.angle);
+ ctx.fillStyle=isPlayer?'#ff72b2':'#72e6d0';ctx.beginPath();ctx.arc(0,0,isPlayer?14:12,0,7);ctx.fill();
+ ctx.font='16px Apple Color Emoji';ctx.textAlign='center';ctx.textBaseline='middle';
+ ctx.fillText(isPlayer?'😎':'😈',0,0);
+ ctx.restore();
+}
+function draw(){
+ drawGrid();
+ foods.forEach(drawFood);bots.forEach(b=>drawSnake(b,false));drawSnake(player,true);
+ for(const p of particles){ctx.globalAlpha=Math.max(0,p.life);ctx.font='22px Apple Color Emoji';ctx.fillText(p.emoji,p.x,p.y)}ctx.globalAlpha=1;
+}
+function loop(t){
+ if(!running)return;const dt=Math.min(.035,(t-last)/1000||.016);last=t;update(dt);draw();raf=requestAnimationFrame(loop)
+}
+function startGame(){
+ document.getElementById('intro').classList.remove('active');document.getElementById('end').classList.remove('active');document.getElementById('game').classList.add('active');
+ reset();running=true;last=performance.now();raf=requestAnimationFrame(loop);
+}
+document.getElementById('start').addEventListener('click',startGame);
+document.getElementById('replay').addEventListener('click',startGame);
+})();
+</script>
+</body>
+</html>
