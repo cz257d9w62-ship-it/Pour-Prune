@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#0b0715">
+<title>Pour Prune 💜</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#090611;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display",system-ui,sans-serif;color:white;touch-action:none}
+.screen{position:fixed;inset:0;display:none}.active{display:block}
+#intro,#finish{display:none;align-items:center;justify-content:center;text-align:center;padding:24px;background:radial-gradient(circle at 50% 15%,#542048,#0b0715 62%)}
+#intro.active,#finish.active{display:flex}
+.card{width:min(92vw,440px);padding:30px 24px;border-radius:30px;background:#ffffff0b;border:1px solid #ffffff18;backdrop-filter:blur(18px);box-shadow:0 25px 80px #0009}
+h1{font-size:clamp(34px,10vw,54px);margin:10px 0 14px;line-height:1}
+h2{font-size:31px;margin:10px 0}
+p{color:#d9cedf;line-height:1.55}
+.kicker{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#f0aeca}
+.heartLogo{font-size:62px;filter:drop-shadow(0 0 20px #ff55a7);animation:bob 2s ease-in-out infinite}
+@keyframes bob{50%{transform:translateY(-8px)}}
+button{border:0;border-radius:18px;padding:15px 25px;background:linear-gradient(135deg,#ff5ea8,#8b5cf6);color:white;font-weight:900;font-size:16px;box-shadow:0 12px 35px #ff5ea833}
+#game{background:#07050d}
+canvas{position:absolute;inset:0;width:100%;height:100%}
+#hud{position:absolute;top:max(12px,env(safe-area-inset-top));left:12px;right:12px;display:flex;justify-content:space-between;z-index:5;pointer-events:none}
+.pill{background:#100b19dd;border:1px solid #ffffff1c;border-radius:999px;padding:9px 13px;font-size:13px;font-weight:800;backdrop-filter:blur(10px)}
+#notice{position:absolute;z-index:7;top:72px;left:50%;transform:translate(-50%,-15px);opacity:0;transition:.3s;background:#fff;color:#24152d;padding:10px 16px;border-radius:16px;font-weight:900;white-space:nowrap;box-shadow:0 10px 35px #0008}
+#notice.show{opacity:1;transform:translate(-50%,0)}
+#joystick{position:absolute;z-index:6;left:20px;bottom:max(22px,env(safe-area-inset-bottom));width:122px;height:122px;border-radius:50%;background:#ffffff0a;border:1px solid #ffffff1b;backdrop-filter:blur(8px)}
+#knob{position:absolute;left:31px;top:31px;width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,#ff70b2,#8b5cf6);box-shadow:0 8px 25px #0008}
+#boost{position:absolute;z-index:6;right:20px;bottom:max(28px,env(safe-area-inset-bottom));width:84px;height:84px;padding:0;border-radius:50%;font-size:28px;background:linear-gradient(135deg,#ffd166,#ff5ea8)}
+#tip{position:absolute;z-index:5;bottom:7px;left:50%;transform:translateX(-50%);font-size:10px;color:#ffffff55;white-space:nowrap}
+#finish .flowers{font-size:70px;letter-spacing:-12px}
+.love{font-size:50px;font-weight:1000;background:linear-gradient(90deg,#ff6cab,#b48cff,#ffd166);-webkit-background-clip:text;color:transparent}
+</style>
+</head>
+<body>
+
+<section id="intro" class="screen active">
+ <div class="card">
+  <div class="heartLogo">💜</div>
+  <div class="kicker">petit jeu secret</div>
+  <h1>Coucou ma Prune</h1>
+  <p>J’ai préparé un p’tit jeu pour te remonter le moral.</p>
+  <p>Ps : ne me remercie pas 😘</p>
+  <button id="play">Jouer</button>
+ </div>
+</section>
+
+<section id="game" class="screen">
+ <canvas id="c"></canvas>
+ <div id="hud"><div class="pill">🐍 Taille <span id="size">5</span> / 45</div><div class="pill">❤️ <span id="lives">3</span></div></div>
+ <div id="notice"></div>
+ <div id="joystick"><div id="knob"></div></div>
+ <button id="boost">⚡</button>
+ <div id="tip">Glisse le joystick pour diriger ton serpent</div>
+</section>
+
+<section id="finish" class="screen">
+ <div class="card">
+  <div class="flowers">💐🌷🌹🌸</div>
+  <div class="kicker">tu as gagné</div>
+  <h2>GG ma Prune 🐍</h2>
+  <div class="love">Je t’aime ❤️</div>
+  <p>Je voulais juste te faire sourire un peu. Maintenant tu peux réclamer ton vrai bouquet. 😘</p>
+  <button id="again">Rejouer</button>
+ </div>
+</section>
+
+<script>
+const canvas=document.getElementById('c'),ctx=canvas.getContext('2d');
+let W,H,D,raf,last,playing=false,score,lives,player,foods,bots,joyX=0,joyY=0,boost=false,noticeTimer=0;
+const TARGET=45, WORLD=2600;
+
+function resize(){D=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;canvas.width=W*D;canvas.height=H*D;canvas.style.width=W+'px';canvas.style.height=H+'px';ctx.setTransform(D,0,0,D,0,0)}
+addEventListener('resize',resize);resize();
+const R=(a,b)=>Math.random()*(b-a)+a, C=(n,a,b)=>Math.max(a,Math.min(b,n));
+const d=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+
+function food(){return{x:R(-WORLD,WORLD),y:R(-WORLD,WORLD),r:R(5,10),type:Math.random()<.15?'💗':'•'}}
+function snake(x,y,color,name,len,face){let body=[];for(let i=0;i<len;i++)body.push({x:x-i*12,y});return{x,y,angle:R(0,7),color,name,body,face,speed:R(70,95)}}
+function reset(){
+ score=5;lives=3;joyX=joyY=0;foods=[];bots=[];
+ player=snake(0,0,'#ff63a7','Toi',score,'😎');
+ for(let i=0;i<170;i++)foods.push(food());
+ const colors=['#59e1c1','#7da7ff','#ffcf5c','#ff7a76','#c58cff','#66d57c','#ff8ad8'];
+ const faces=['😂','🤣','😏','🤨','😈','😎','🤡'];
+ for(let i=0;i<7;i++){let b=snake(R(-1000,1000),R(-1000,1000),colors[i],['Safwan','Pruny','Le boss','Le relou','Le serpent','Hugo','Valence'][i],12+Math.floor(R(0,15)),faces[i]);bots.push(b)}
+ updateHUD();
+}
+function updateHUD(){document.getElementById('size').textContent=score;document.getElementById('lives').textContent=lives}
+function msg(t){let n=document.getElementById('notice');n.textContent=t;n.classList.add('show');clearTimeout(msg.t);msg.t=setTimeout(()=>n.classList.remove('show'),1900)}
+function grow(){score++;player.body.push({...player.body[player.body.length-1]});updateHUD();
+ if(score===10)msg('💗 Tu viens de manger un cœur pour Prune');
+ if(score===18)msg('🚨 Un serpent avec ta tête arrive...');
+ if(score===27)msg('😂 Ils sont tous en train de te regarder');
+ if(score===36)msg('🔥 Plus que quelques cœurs !');
+ if(score>=TARGET)win();
+}
+function loseLife(){lives--;updateHUD();msg(lives?'💥 Aïe 😭 Fais attention !':'💀 Même Safwan aurait fait mieux mdrr');
+ if(lives<=0){setTimeout(()=>{reset();},900)}
+ else{player.x=0;player.y=0;player.body=[];for(let i=0;i<score;i++)player.body.push({x:-i*12,y:0})}
+}
+function win(){playing=false;cancelAnimationFrame(raf);setTimeout(()=>{document.getElementById('game').classList.remove('active');document.getElementById('finish').classList.add('active')},600)}
+
+function drawGrid(camX,camY){
+ ctx.fillStyle='#07050d';ctx.fillRect(0,0,W,H);
+ const grid=70;ctx.strokeStyle='#ffffff09';ctx.lineWidth=1;
+ const ox=((W/2-camX)%grid+grid)%grid,oy=((H/2-camY)%grid+grid)%grid;
+ for(let x=ox;x<W;x+=grid){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}
+ for(let y=oy;y<H;y+=grid){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+}
+function screenPos(o,camX,camY){return{x:o.x-camX+W/2,y:o.y-camY+H/2}}
+function drawFood(f,camX,camY){
+ let p=screenPos(f,camX,camY);if(p.x<-30||p.x>W+30||p.y<-30||p.y>H+30)return;
+ ctx.save();ctx.translate(p.x,p.y);
+ if(f.type==='💗'){ctx.font='18px "Apple Color Emoji"';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('💗',0,0)}
+ else{ctx.shadowBlur=13;ctx.shadowColor='#ff63a7';ctx.fillStyle='#ff72b2';ctx.beginPath();ctx.arc(0,0,f.r,0,7);ctx.fill()}
+ ctx.restore();
+}
+function drawSnake(s,camX,camY,isPlayer=false){
+ for(let i=s.body.length-1;i>=0;i--){
+  let p=screenPos(s.body[i],camX,camY);let t=i/s.body.length;let r=isPlayer?Math.max(7,14-t*5):Math.max(6,12-t*5);
+  ctx.fillStyle=s.color;ctx.beginPath();ctx.arc(p.x,p.y,r,0,7);ctx.fill();
+ }
+ let h=screenPos(s.body[0],camX,camY);
+ ctx.save();ctx.translate(h.x,h.y);ctx.rotate(s.angle);
+ ctx.fillStyle=s.color;ctx.beginPath();ctx.arc(0,0,isPlayer?16:14,0,7);ctx.fill();
+ ctx.font=isPlayer?'20px "Apple Color Emoji"':'19px "Apple Color Emoji"';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(s.face,0,0);
+ ctx.restore();
+ // name tag
+ ctx.font='bold 11px system-ui';ctx.textAlign='center';ctx.fillStyle='#ffffffaa';ctx.fillText(s.name,h.x,h.y-20);
+}
+function update(dt){
+ if(Math.hypot(joyX,joyY)>.1)player.angle=Math.atan2(joyY,joyX);
+ const speed=player.speed*(boost?1.75:1);
+ player.x+=Math.cos(player.angle)*speed*dt;player.y+=Math.sin(player.angle)*speed*dt;
+ // soft world boundary
+ const edge=WORLD-50;if(Math.hypot(player.x,player.y)>edge){player.angle=Math.atan2(-player.y,-player.x);player.x+=Math.cos(player.angle)*30*dt;player.y+=Math.sin(player.angle)*30*dt}
+ player.body.unshift({x:player.x,y:player.y});player.body.length=score*5+4;
+ for(const b of bots){
+   if(Math.random()<.02)b.angle+=R(-.8,.8);
+   let pd=d(b,player);
+   if(pd<450)b.angle=Math.atan2(player.y-b.y,player.x-b.x)+R(-.55,.55);
+   b.x+=Math.cos(b.angle)*b.speed*dt;b.y+=Math.sin(b.angle)*b.speed*dt;
+   if(Math.abs(b.x)>WORLD||Math.abs(b.y)>WORLD)b.angle+=Math.PI;
+   b.body.unshift({x:b.x,y:b.y});b.body.length=85;
+ }
+ for(let i=0;i<foods.length;i++){
+   if(d(foods[i],player)<24){foods[i]=food();grow()}
+ }
+ // collision with heads/bodies
+ for(const b of bots){
+   if(d(b.body[0],player)<22){loseLife();b.angle+=Math.PI}
+   for(let i=6;i<b.body.length;i+=4)if(d(b.body[i],player)<16){loseLife();break}
+ }
+ if(Math.random()<dt*.03)msg(['😂 Un serpent avec ta tête te cherche','💌 Prune, mange les cœurs !','🐍 Attention au serpent Safwan','🤣 Ptdrrrr regarde qui arrive','❤️ Encore quelques cœurs'][Math.floor(Math.random()*5)]);
+}
+function draw(){
+ const camX=player.x,camY=player.y;drawGrid(camX,camY);
+ for(const f of foods)drawFood(f,camX,camY);
+ for(const b of bots)drawSnake(b,camX,camY,false);
+ drawSnake(player,camX,camY,true);
+}
+function loop(t){if(!playing)return;let dt=Math.min(.035,(t-last)/1000||.016);last=t;update(dt);draw();raf=requestAnimationFrame(loop)}
+
+function start(){
+ document.getElementById('intro').classList.remove('active');document.getElementById('finish').classList.remove('active');document.getElementById('game').classList.add('active');
+ reset();playing=true;last=performance.now();raf=requestAnimationFrame(loop);
+}
+document.getElementById('play').onclick=start;document.getElementById('again').onclick=start;
+
+// joystick
+const j=document.getElementById('joystick'),k=document.getElementById('knob');
+let activeTouch=null;
+function setJoy(x,y){let r=j.getBoundingClientRect(),dx=x-(r.left+r.width/2),dy=y-(r.top+r.height/2),m=Math.hypot(dx,dy),max=42;if(m>max){dx=dx/m*max;dy=dy/m*max}joyX=dx/max;joyY=dy/max;k.style.transform=`translate(${dx}px,${dy}px)`}
+function clearJoy(){joyX=joyY=0;k.style.transform='translate(0,0)'}
+j.addEventListener('touchstart',e=>{e.preventDefault();let t=e.changedTouches[0];activeTouch=t.identifier;setJoy(t.clientX,t.clientY)},{passive:false});
+j.addEventListener('touchmove',e=>{e.preventDefault();for(let t of e.changedTouches)if(t.identifier===activeTouch)setJoy(t.clientX,t.clientY)},{passive:false});
+j.addEventListener('touchend',e=>{for(let t of e.changedTouches)if(t.identifier===activeTouch){activeTouch=null;clearJoy()}},{passive:false});
+const b=document.getElementById('boost');b.addEventListener('touchstart',e=>{e.preventDefault();boost=true},{passive:false});b.addEventListener('touchend',()=>boost=false);b.addEventListener('touchcancel',()=>boost=false);
+})();
+</script>
+</body>
+</html>
