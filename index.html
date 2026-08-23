@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Pour Prune 💛</title>
+<style>
+:root{--bg:#080b16;--glass:rgba(10,13,28,.78);--line:rgba(255,255,255,.13)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:white}
+body{touch-action:none}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block;background:#090d1b}
+#hud{position:fixed;top:max(12px,env(safe-area-inset-top));left:12px;right:12px;display:flex;justify-content:space-between;gap:8px;pointer-events:none;z-index:5}
+.pill{background:var(--glass);border:1px solid var(--line);backdrop-filter:blur(12px);padding:8px 11px;border-radius:16px;font-weight:800;font-size:13px;box-shadow:0 8px 30px #0005}
+#event{position:fixed;top:76px;left:50%;transform:translateX(-50%) scale(.9);opacity:0;z-index:6;background:rgba(255,185,75,.95);color:#17100a;padding:10px 16px;border-radius:999px;font-weight:900;white-space:nowrap;transition:.25s;pointer-events:none}
+#event.show{opacity:1;transform:translateX(-50%) scale(1)}
+#menu{position:fixed;inset:0;z-index:10;display:grid;place-items:center;padding:24px;background:radial-gradient(circle at 50% 35%,#25315c88,transparent 45%),linear-gradient(180deg,#070916cc,#070916f5)}
+.card{width:min(92vw,430px);padding:28px 22px;border:1px solid #ffffff1b;border-radius:28px;background:rgba(12,16,34,.82);backdrop-filter:blur(20px);text-align:center;box-shadow:0 30px 80px #0009}
+h1{margin:0 0 6px;font-size:31px}
+.sub{color:#b9bfd8;line-height:1.5;margin:0 auto 18px}
+button{border:0;border-radius:17px;padding:15px 24px;font-size:18px;font-weight:900;color:#16120a;background:linear-gradient(135deg,#ffd56a,#ff9e55);box-shadow:0 12px 30px #ffae4538}
+.small{margin-top:12px;color:#8f96b2;font-size:12px}
+#joystick{position:fixed;left:22px;bottom:max(24px,env(safe-area-inset-bottom));width:126px;height:126px;border-radius:50%;background:#ffffff10;border:1px solid #ffffff20;z-index:7;display:none}
+#stick{position:absolute;left:33px;top:33px;width:60px;height:60px;border-radius:50%;background:#ffffff25;border:1px solid #ffffff38}
+#boost{position:fixed;right:20px;bottom:max(28px,env(safe-area-inset-bottom));z-index:7;width:88px;height:88px;border-radius:50%;display:none;background:#ffffff12;border:1px solid #ffffff2a;color:#fff;font-weight:900}
+#hint{position:fixed;bottom:8px;left:50%;transform:translateX(-50%);z-index:4;color:#707893;font-size:10px;pointer-events:none}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="hud">
+  <div class="pill">🐍 <span id="score">0</span> points</div>
+  <div class="pill">📏 <span id="size">12</span> segments</div>
+  <div class="pill">🏆 <span id="rank">#1</span></div>
+</div>
+<div id="event"></div>
+<div id="joystick"><div id="stick"></div></div>
+<button id="boost">BOOST</button>
+<div id="hint">Glisse sur le joystick pour diriger • BOOST pour accélérer</div>
+
+<div id="menu">
+  <div class="card">
+    <h1>Coucou ma Prune</h1>
+    <p class="sub">J’ai préparé un p’tit jeu pour te remonter le moral<br><b>Ps : ne me remercie pas 😘</b></p>
+    <button id="play">Jouer</button>
+    <div class="small">Petit jeu pensé pour téléphone 📱</div>
+  </div>
+</div>
+
+<script>
+(() => {
+"use strict";
+const canvas=document.getElementById("game"), ctx=canvas.getContext("2d");
+const menu=document.getElementById("menu"), play=document.getElementById("play");
+const joy=document.getElementById("joystick"), stick=document.getElementById("stick"), boostBtn=document.getElementById("boost");
+const scoreEl=document.getElementById("score"), sizeEl=document.getElementById("size"), rankEl=document.getElementById("rank"), eventEl=document.getElementById("event");
+const W=()=>canvas.width, H=()=>canvas.height;
+let dpr=1, running=false, last=0, cam={x:0,y:0}, world=5200, foods=[], snakes=[], player=null, score=0, gameTime=0, eventTimer=0;
+let keys={up:false,down:false,left:false,right:false}, joyActive=false, joyX=0,joyY=0,boost=false;
+const faceImgs=[1,2,3].map(n=>{const i=new Image();i.src=`assets/face${n}.jpg`;return i});
+
+function resize(){dpr=Math.min(devicePixelRatio||1,2);canvas.width=innerWidth*dpr;canvas.height=innerHeight*dpr;canvas.style.width=innerWidth+"px";canvas.style.height=innerHeight+"px";ctx.setTransform(dpr,0,0,dpr,0,0)}
+addEventListener("resize",resize); resize();
+
+function rnd(a,b){return a+Math.random()*(b-a)}
+function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y)}
+function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
+function angleDiff(a,b){return Math.atan2(Math.sin(b-a),Math.cos(b-a))}
+
+function makeSnake(name,x,y,color,len,isPlayer=false,face=1){
+  let s={name,x,y,color,len,segments:[],angle:rnd(0,Math.PI*2),target:rnd(0,Math.PI*2),speed:1.5,alive:true,isPlayer,face};
+  for(let i=0;i<len;i++)s.segments.push({x:x-Math.cos(s.angle)*i*9,y:y-Math.sin(s.angle)*i*9});
+  return s;
+}
+function reset(){
+  score=0; gameTime=0; eventTimer=0; foods=[]; snakes=[];
+  player=makeSnake("Prune",world/2,world/2,"#ffbd54",12,true,2); snakes.push(player);
+  for(let i=0;i<11;i++){
+    let a=rnd(0,Math.PI*2), r=rnd(400,2100);
+    let s=makeSnake(["Hugo","Le frérot","Le serpent chelou","Mini Safwan","Le rival","Patate","Jean-Michel","???","Le grand","Speedy","Le malin"][i],
+      world/2+Math.cos(a)*r,world/2+Math.sin(a)*r,
+      ["#77d6ff","#ff6f91","#9dff8a","#c28cff","#ff9d54"][i%5],Math.floor(rnd(18,40)),false,(i%3)+1);
+    s.target=rnd(0,Math.PI*2); snakes.push(s);
+  }
+  for(let i=0;i<650;i++)foods.push({x:rnd(80,world-80),y:rnd(80,world-80),r:rnd(3,6),v:Math.floor(rnd(1,5))});
+}
+function showEvent(t){
+  eventEl.textContent=t; eventEl.classList.add("show");
+  clearTimeout(showEvent.t); showEvent.t=setTimeout(()=>eventEl.classList.remove("show"),1800);
+}
+
+function eatNearby(s){
+  for(let i=foods.length-1;i>=0;i--){
+    const f=foods[i];
+    if(Math.hypot(s.x-f.x,s.y-f.y)<18+s.segments.length*.06){
+      score += f.v; s.len += .11*f.v;
+      s.segments.push({...s.segments[s.segments.length-1]});
+      foods.splice(i,1);
+    }
+  }
+}
+function dropLoot(s){
+  for(let i=0;i<Math.min(45,Math.floor(s.len*.9));i++){
+    const q=s.segments[Math.floor(Math.random()*s.segments.length)];
+    foods.push({x:q.x+rnd(-16,16),y:q.y+rnd(-16,16),r:rnd(4,8),v:Math.floor(rnd(2,7))});
+  }
+}
+function kill(s,reason){
+  if(!s.alive)return;
+  s.alive=false; dropLoot(s);
+  if(s===player){
+    running=false; joy.style.display="none"; boostBtn.style.display="none";
+    menu.style.display="grid";
+    menu.querySelector("h1").textContent="Aïe 😭";
+    menu.querySelector(".sub").innerHTML=`Tu t’es fait avoir.<br><b>${Math.floor(score)} points</b> — essaie encore.`;
+    play.textContent="Rejouer";
+    showEvent("💥 Ton serpent est KO");
+  }else{
+    score += Math.floor(s.len*4);
+    showEvent(`💥 ${s.name} éliminé ! +${Math.floor(s.len*4)} pts`);
+    setTimeout(()=>respawnBot(s),900);
+  }
+}
+function respawnBot(s){
+  const idx=snakes.indexOf(s); if(idx<0)return;
+  let a=rnd(0,Math.PI*2),r=rnd(1200,2200);
+  snakes[idx]=makeSnake(s.name,world/2+Math.cos(a)*r,world/2+Math.sin(a)*r,s.color,Math.floor(rnd(22,55)),false,(Math.floor(Math.random()*3)+1));
+}
+
+function updateSnake(s,dt){
+  if(!s.alive)return;
+  if(s.isPlayer){
+    let dx=joyX,dy=joyY;
+    if(!joyActive){
+      dx=(keys.right?1:0)-(keys.left?1:0); dy=(keys.down?1:0)-(keys.up?1:0);
+    }
+    if(Math.hypot(dx,dy)>.12)s.angle=Math.atan2(dy,dx);
+    let sp=boost?3.8:1.85;
+    if(boost && s.len>8){s.len-=.12; if(Math.random()<.25 && s.segments.length>8)s.segments.pop();}
+    s.speed=sp;
+  }else{
+    // Bots choose a new target, chase nearby food, or make an aggressive pass.
+    s.target += rnd(-.08,.08);
+    const p=player;
+    if(p && p.alive && dist(s,p)<620){
+      const toward=Math.atan2(p.y-s.y,p.x-s.x);
+      if(Math.random()<.45)s.target=toward + (Math.random()<.5?Math.PI/2:-Math.PI/2);
+    }else if(Math.random()<.03){
+      s.target=rnd(0,Math.PI*2);
+    }
+    const diff=angleDiff(s.angle,s.target);
+    s.angle += clamp(diff,-.055,.055);
+    s.speed=1.25 + Math.min(.9,s.len/100);
+  }
+  s.x += Math.cos(s.angle)*s.speed*dt*60/60;
+  s.y += Math.sin(s.angle)*s.speed*dt*60/60;
+  const margin=45;
+  if(s.x<margin){s.x=margin;s.angle=0}
+  if(s.x>world-margin){s.x=world-margin;s.angle=Math.PI}
+  if(s.y<margin){s.y=margin;s.angle=Math.PI/2}
+  if(s.y>world-margin){s.y=world-margin;s.angle=-Math.PI/2}
+  const head={x:s.x,y:s.y};
+  s.segments.unshift(head);
+  const desired=Math.max(10,Math.floor(s.len));
+  while(s.segments.length>desired)s.segments.pop();
+  // Follow-the-leader smoothing
+  for(let i=1;i<s.segments.length;i++){
+    const prev=s.segments[i-1], cur=s.segments[i];
+    const dx=prev.x-cur.x,dy=prev.y-cur.y,d=Math.hypot(dx,dy);
+    const gap=8.5;
+    if(d>gap){cur.x += dx/d*(d-gap)*.55;cur.y += dy/d*(d-gap)*.55;}
+  }
+  eatNearby(s);
+}
+
+function collisions(){
+  // Head against every other snake body. This is the key Slither-like mechanic.
+  for(const a of snakes){
+    if(!a.alive)continue;
+    for(const b of snakes){
+      if(a===b||!b.alive)continue;
+      for(let i=5;i<b.segments.length;i+=2){
+        const q=b.segments[i];
+        if(Math.hypot(a.x-q.x,a.y-q.y)<10 + Math.min(12,b.len*.06)){
+          kill(a,`touché par ${b.name}`);
+          break;
+        }
+      }
+      if(!a.alive)break;
+    }
+  }
+  // Small heads close to each other: make the longer snake slightly advantaged.
+  for(let i=0;i<snakes.length;i++)for(let j=i+1;j<snakes.length;j++){
+    const a=snakes[i],b=snakes[j]; if(!a.alive||!b.alive)continue;
+    if(dist(a,b)<13){
+      if(a.len>b.len*1.18)kill(b,"collision");
+      else if(b.len>a.len*1.18)kill(a,"collision");
+    }
+  }
+}
+
+function drawBackground(){
+  ctx.fillStyle="#090d1b";ctx.fillRect(0,0,innerWidth,innerHeight);
+  const grid=90;
+  ctx.save();ctx.translate(-cam.x,-cam.y);
+  ctx.strokeStyle="rgba(140,160,210,.07)";ctx.lineWidth=1;
+  const sx=Math.floor(cam.x/grid)*grid-100, sy=Math.floor(cam.y/grid)*grid-100;
+  for(let x=sx;x<cam.x+innerWidth+100;x+=grid){ctx.beginPath();ctx.moveTo(x,cam.y-100);ctx.lineTo(x,cam.y+innerHeight+100);ctx.stroke()}
+  for(let y=sy;y<cam.y+innerHeight+100;y+=grid){ctx.beginPath();ctx.moveTo(cam.x-100,y);ctx.lineTo(cam.x+innerWidth+100,y);ctx.stroke()}
+  // decorative stars / bubbles
+  for(let i=0;i<50;i++){
+    const x=(i*997)%world,y=(i*577)%world;
+    if(x>cam.x-50&&x<cam.x+innerWidth+50&&y>cam.y-50&&y<cam.y+innerHeight+50){
+      ctx.fillStyle="rgba(255,255,255,.08)";ctx.beginPath();ctx.arc(x,y,(i%3)+1,0,7);ctx.fill();
+    }
+  }
+  ctx.strokeStyle="rgba(255,190,90,.35)";ctx.lineWidth=4;ctx.strokeRect(30,30,world-60,world-60);
+  ctx.restore();
+}
+function drawFood(){
+  ctx.save();ctx.translate(-cam.x,-cam.y);
+  for(const f of foods){
+    if(f.x<cam.x-20||f.x>cam.x+innerWidth+20||f.y<cam.y-20||f.y>cam.y+innerHeight+20)continue;
+    const g=ctx.createRadialGradient(f.x,f.y,0,f.x,f.y,f.r*3);
+    g.addColorStop(0,"#fff7c7");g.addColorStop(.3,"#ffd36b");g.addColorStop(1,"rgba(255,160,70,0)");
+    ctx.fillStyle=g;ctx.beginPath();ctx.arc(f.x,f.y,f.r*3,0,7);ctx.fill();
+    ctx.fillStyle="#ffd56a";ctx.beginPath();ctx.arc(f.x,f.y,f.r,0,7);ctx.fill();
+  }
+  ctx.restore();
+}
+function drawSnake(s){
+  if(!s.alive)return;
+  ctx.save();ctx.translate(-cam.x,-cam.y);
+  // body
+  for(let i=s.segments.length-1;i>=0;i--){
+    const q=s.segments[i], r=9 + Math.min(8,s.len/90);
+    ctx.globalAlpha=.35+.65*(1-i/s.segments.length);
+    ctx.fillStyle=s.color;ctx.beginPath();ctx.arc(q.x,q.y,r,0,7);ctx.fill();
+    if(i%5===0){ctx.fillStyle="rgba(255,255,255,.18)";ctx.beginPath();ctx.arc(q.x-r*.25,q.y-r*.25,r*.28,0,7);ctx.fill()}
+  }
+  ctx.globalAlpha=1;
+  const r=12+Math.min(10,s.len/100);
+  // head ring
+  ctx.fillStyle="#fff";ctx.beginPath();ctx.arc(s.x,s.y,r+2,0,7);ctx.fill();
+  ctx.fillStyle=s.color;ctx.beginPath();ctx.arc(s.x,s.y,r,0,7);ctx.fill();
+  // face image inside head for the funny bots / player
+  const img=faceImgs[s.face-1];
+  if(img.complete){
+    ctx.save();ctx.beginPath();ctx.arc(s.x,s.y,r-1,0,7);ctx.clip();ctx.drawImage(img,s.x-r,s.y-r,2*r,2*r);ctx.restore();
+  }
+  ctx.strokeStyle="#0009";ctx.lineWidth=2;ctx.stroke();
+  // eyes
+  const ex=Math.cos(s.angle)*r*.35, ey=Math.sin(s.angle)*r*.35;
+  ctx.fillStyle="#fff";
+  ctx.beginPath();ctx.arc(s.x+ex-ey*.55,s.y+ey+ex*.55,2.8,0,7);ctx.fill();
+  ctx.beginPath();ctx.arc(s.x+ex+ey*.55,s.y+ey-ex*.55,2.8,0,7);ctx.fill();
+  ctx.fillStyle="#111";ctx.beginPath();ctx.arc(s.x+ex-ey*.55,s.y+ey+ex*.55,1.2,0,7);ctx.fill();
+  ctx.beginPath();ctx.arc(s.x+ex+ey*.55,s.y+ey-ex*.55,1.2,0,7);ctx.fill();
+  // name
+  ctx.font="800 11px -apple-system, sans-serif";ctx.textAlign="center";ctx.fillStyle="#fff";ctx.shadowColor="#000";ctx.shadowBlur=5;
+  ctx.fillText(s.name,s.x,s.y-r-10);ctx.shadowBlur=0;
+  ctx.restore();
+}
+function draw(){
+  drawBackground();drawFood();
+  snakes.slice().sort((a,b)=>a.len-b.len).forEach(drawSnake);
+}
+function loop(t){
+  if(!running)return;
+  const dt=Math.min(.033,(t-last)/1000||.016);last=t;gameTime+=dt;
+  snakes.forEach(s=>updateSnake(s,dt));
+  collisions();
+  if(player&&player.alive){
+    cam.x=clamp(player.x-innerWidth/2,0,world-innerWidth);
+    cam.y=clamp(player.y-innerHeight/2,0,world-innerHeight);
+  }
+  // keep food supply dense
+  if(foods.length<500)for(let i=0;i<80;i++)foods.push({x:rnd(70,world-70),y:rnd(70,world-70),r:rnd(3,6),v:Math.floor(rnd(1,5))});
+  scoreEl.textContent=Math.floor(score);
+  sizeEl.textContent=Math.floor(player.len);
+  const alive=snakes.filter(s=>s.alive).sort((a,b)=>b.len-a.len);
+  rankEl.textContent="#"+(alive.indexOf(player)+1);
+  if(gameTime>0 && gameTime%23<dt)showEvent(["👀 Attention, un serpent te chasse !","😂 Un Safwan sauvage apparaît","🌀 Essaie de les encercler","💨 Boost bien dosé = victoire"][Math.floor(Math.random()*4)]);
+  draw();requestAnimationFrame(loop);
+}
+
+function start(){
+  menu.style.display="none";joy.style.display="block";boostBtn.style.display="block";reset();running=true;last=performance.now();requestAnimationFrame(loop);startMusic();
+}
+play.addEventListener("click",start);
+
+// Touch joystick
+function joyPoint(e){
+  const r=joy.getBoundingClientRect(), cx=r.left+r.width/2,cy=r.top+r.height/2;
+  let dx=e.clientX-cx,dy=e.clientY-cy,m=Math.hypot(dx,dy),max=45;
+  if(m>max){dx=dx/m*max;dy=dy/m*max}
+  joyX=dx/max;joyY=dy/max;stick.style.transform=`translate(${dx}px,${dy}px)`;
+}
+joy.addEventListener("pointerdown",e=>{joyActive=true;joy.setPointerCapture(e.pointerId);joyPoint(e)});
+joy.addEventListener("pointermove",e=>{if(joyActive)joyPoint(e)});
+joy.addEventListener("pointerup",()=>{joyActive=false;joyX=joyY=0;stick.style.transform=""});
+boostBtn.addEventListener("pointerdown",()=>boost=true);boostBtn.addEventListener("pointerup",()=>boost=false);boostBtn.addEventListener("pointercancel",()=>boost=false);
+addEventListener("keydown",e=>{if(e.key==="ArrowUp")keys.up=true;if(e.key==="ArrowDown")keys.down=true;if(e.key==="ArrowLeft")keys.left=true;if(e.key==="ArrowRight")keys.right=true;if(e.code==="Space")boost=true});
+addEventListener("keyup",e=>{if(e.key==="ArrowUp")keys.up=false;if(e.key==="ArrowDown")keys.down=false;if(e.key==="ArrowLeft")keys.left=false;if(e.key==="ArrowRight")keys.right=false;if(e.code==="Space")boost=false});
+
+// Original lightweight synth ambience. Starts after a user tap, so iPhone autoplay rules are respected.
+let audioCtx=null, musicOn=false;
+function startMusic(){
+  if(musicOn)return;
+  try{
+    audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+    if(audioCtx.state==="suspended")audioCtx.resume();
+    const master=audioCtx.createGain();master.gain.value=.045;master.connect(audioCtx.destination);
+    const notes=[220,261.63,329.63,293.66,246.94,196,246.94,293.66];
+    let k=0;
+    setInterval(()=>{
+      if(!running||!audioCtx)return;
+      const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+      o.type="sine";o.frequency.value=notes[k++%notes.length];
+      g.gain.setValueAtTime(0,audioCtx.currentTime);
+      g.gain.linearRampToValueAtTime(.65,audioCtx.currentTime+.03);
+      g.gain.exponentialRampToValueAtTime(.001,audioCtx.currentTime+.55);
+      o.connect(g);g.connect(master);o.start();o.stop(audioCtx.currentTime+.58);
+    },620);
+    musicOn=true;
+  }catch(e){}
+}
+})();
+</script>
+</body>
+</html>
